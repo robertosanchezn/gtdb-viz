@@ -1,0 +1,40 @@
+read_metadata <- function(path) {
+  metadata <- read_tsv(
+    metadata_file,
+    col_select = c(
+      gtdb_genome_representative,
+      coding_density,
+      gc_percentage,
+      genome_size,
+      gtdb_taxonomy,
+    ),
+    col_types = "cdddc"
+  )
+  metadata
+}
+
+read_and_format_tree <- function(path, metadata) {
+  gtdb_tree <- read.tree(tree_file)
+  
+  # Remove single quotes
+  
+  gtdb_tree$node.label <- str_remove_all(gtdb_tree$node.label, "'")
+  
+  tax <- distinct(metadata, label = gtdb_genome_representative, gtdb_taxonomy)
+  
+  gtdb_tree <- as_tibble(gtdb_tree) |>
+    left_join(tax, by = "label") |> 
+    mutate(
+      # Split node labels into bootstrap and taxon
+      bootstrap = str_match(label, "(^\\d{1,3}\\.\\d)(?=$|:)")[, 2],
+      bootstrap = as.numeric(bootstrap),
+      species = str_match(gtdb_taxonomy, "(s__.+?$)")[,2],
+      taxon = str_match(label, "^\\d{1,3}\\.\\d:(.+$)")[, 2],
+      taxon = if_else(is.na(taxon) & !is.na(species), species, taxon),
+      label = if_else(is.na(gtdb_taxonomy), label, species)
+    ) |>
+    as.treedata()
+  
+  gtdb_tree
+  
+}

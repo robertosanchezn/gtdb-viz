@@ -1,0 +1,304 @@
+---
+title: "TAD VD: Primer Informe"
+author: "Roberto Sánchez"
+date: "2023-10-08"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+htmlwidgets::sizingPolicy(defaultHeight = 20)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Visualización Interactiva del “Árbol de la Vida” Bacteriano en R.
+
+### Introducción
+
+Los árboles son un tipo de estructura de datos común compuesta por un set de 
+nodos interconectados. Formalmente, se consideran grafos acíclicos conectados. 
+
+Los árboles filogenéticos permiten visualizar las relaciones evolutivas
+entre varios organismos en base a las diferencias en la secuencia de ADN de uno
+de sus genes. En ellos, cada nodo interno representa un teórico ancestro común 
+a partir del cual divergieron otros dos nodos, las hojas representan los 
+organismos a partir de los cuales se construyó el árbol. El eje x representa 
+el número de mutaciones que ha sufrido un gen a lo largo del tiempo. 
+
+
+La base de datos [GTDB](https://gtdb.ecogenomic.org/) recoge más de 400.000 
+genomas de Bacterias y Arqueas (Procariotas), las cuales representan bien la 
+totalidad de procariotas. Usando un set grande de genes de cada organismo, 
+ha construido un árbol "filogenómico" que muestra las relaciones evolutivas 
+entre ellas. Usando este árbol, GTDB les asigna con precisión una taxonomía 
+con 7 niveles: dominio, filo, clase, orden, familia, género y especie. 
+
+
+Actualmente, la base de datos no ofrece una visualización de este árbol. 
+Representar un árbol de este tamaño puede ser computacionalmente costoso
+y resulta difícil de interpretar. Una posible solución para esto sería emplear 
+visualizaciones interactivas.
+
+Este trabajo trata de crear visualizaciones interactivas en R de este árbol, 
+que incluyan anotaciones de taxonomía. Además, el árbol vendría enfrentado a 
+otros datos genómicos de interés proporcionados por GTDB. Estas son:
+
+* el tamaño del genoma.
+
+* el porcentaje del genoma que está formado por genes. 
+
+* el porcentaje de bases del ADN que son G o C. 
+
+Para ello emplearía la suite de paquetes asociados a 
+[ggtree](https://yulab-smu.top/treedata-book/index.html), y ggiraph.
+Si esto resulta exitoso, podría implementar una sencilla aplicación web
+[Shiny](https://shiny.posit.co/) que permita navegar por el árbol 
+clicando en un taxón para visualizar sus taxones descendientes. 
+
+
+### Paquetes empleados.  
+
+* **tidyverse**
+* **tidytree**, para la manipulación de árboles filogenéticos
+* **ggtree**, para la visualización de árboles filogenéticos
+* **ggiraph**, para transformar ggplots en interacivos. Originalmente en la 
+descripción proponía plotly, pero estoy obteniendo mejores resultados
+con ggiraph
+
+```{r load, message=FALSE}
+library(tidyverse)
+library(tidytree)
+library(ggtree)
+library(ggiraph)
+library(cowplot)
+```
+
+Descargar datos
+
+```{r download}
+
+if (!file.exists("data")) {
+  dir.create("data")
+}
+
+gtdb_root <- "https://data.gtdb.ecogenomic.org/releases/release214/214.1/"
+tree_url <- paste0(gtdb_root, "bac120_r214.tree")
+metadata_url <- paste0(gtdb_root, "bac120_metadata_r214.tsv.gz")
+
+source("scripts/download_data.R")
+
+download_and_unzip(tree_url)
+download_and_unzip(metadata_url)
+```
+
+## Exploración de los metadatos
+
+```{r read}
+source("scripts/read_data.R")
+
+metadata_file <- file.path("data", "bac120_metadata_r214.tsv")
+metadata <- read_metadata(metadata_file)
+metadata
+
+```
+
+### Histograma 2D tamaño vs %GC
+
+```{r}
+metadata |> 
+  ggplot(aes(x = genome_size, y = gc_percentage)) +
+  geom_bin2d(bins = 50) +
+  scale_fill_gradient2(
+    low = "steelblue",
+    mid = "lemonchiffon",
+    high = "firebrick", 
+    midpoint = sqrt(2500), 
+    trans = "sqrt") +
+  xlim(0, 1.5e7)
+```
+
+
+### Tamaño del genoma vs Porcentaje de GC de los 7 órdenes más comunes
+
+```{r scatter 1}
+
+metadata |>
+  mutate(
+    order = str_match(gtdb_taxonomy, "o__(.+?);")[,2],
+    order = fct_lump_n(order, 7)
+  ) |> 
+  filter(order != "Other") |> 
+  ggplot(aes(x = genome_size, y = gc_percentage, color = order)) +
+  geom_point(alpha = 0.1, size = 0.1) + 
+  xlim(1e6, 1e7) +
+  # Use solid points on the legend
+  guides(color = guide_legend(override.aes = list(size = 4, alpha = 1)))
+
+```
+
+Al nivel "orden", tanto el tamaño como el %GC varían bastante. 
+Sin embargo el %GC parece distribuirse en "bandas", que quizás 
+pertenzcan a taxones más pequeños. 
+
+Para ilustrar esto, realizamos un "zoom in" en *Burkholderiales*, y coloreamos 
+por especie. 
+
+### Del orden *Burkholderiales*, tamaño vs %GC para sus 7 especies más comunes
+
+
+```{r scatter 2}
+metadata |>
+  filter(str_detect(gtdb_taxonomy, "o__Burkholderiales")) |> 
+  mutate(
+    genus = str_match(gtdb_taxonomy, "g__(.+?);")[,2],
+    genus = fct_lump_n(genus, 7)
+  ) |> 
+  ggplot(aes(x = genome_size, y = gc_percentage, color = genus)) +
+  geom_point(alpha = 0.1) + 
+  guides(color = guide_legend(override.aes = list(size = 4, alpha = 1))) + 
+  scale_color_manual(values = c(RColorBrewer::brewer.pal(7, "Set1"), "gray")) +
+  xlim(0, 1e7)
+```
+
+El %GC parece ser una medida característa de cada género, al menos en este orden.
+El tamaño, sin embargo varía mucho dentro de algunos géneros, mientras que 
+en otros (ej, *Neisseria*) es menos variable.
+Veamos este género. 
+
+```{r scatter 3}
+metadata |>
+  filter(str_detect(gtdb_taxonomy, "g__Neisseria")) |> 
+  mutate(
+    species = str_match(gtdb_taxonomy, "s__(.+?)$")[,2],
+    species = fct_lump_n(species, 7)
+  ) |> 
+  ggplot(aes(x = genome_size, y = gc_percentage, color = species)) +
+  geom_point(alpha = 0.5) + 
+  guides(color = guide_legend(override.aes = list(size = 4, alpha = 1))) + 
+  scale_color_manual(values = c(RColorBrewer::brewer.pal(7, "Set1"), "gray")) 
+```
+
+Como vemos, estas medidas varían de forma muy dispar entre unos taxones y otros. 
+En algunos casos, a un cierto nivel taxonomico los taxones se ven separados, 
+mientras que en otros no. 
+Además, con colores solo podemos distinguir un pequeño subconjunto de los taxones, 
+y no podemos ver las relaciones entre ellos. 
+
+
+```{r read gtdb tree}
+tax_levels <- c("domain",
+                "phylum",
+                "class",
+                "order",
+                "family",
+                "genus",
+                "species")
+
+tree_file <- file.path("data", "bac120_r214.tree")
+gtdb_tree <- read_and_format_tree(tree_file, metadata)
+```
+
+
+### Árbol del orden *Burkholderiales* mostrando su %GC
+
+Una forma más sencilla de comparar taxones entre sí es mostrar un árbol, 
+agrupar las hojas de este árbol en taxones, y mostrar una de las variables 
+para cada una de las agrupaciones, por ejemplo, en un boxplot. 
+
+
+```{r burkhold tree}
+source("scripts/wrangle_tree.R")
+source("scripts/plot_tree.R")
+
+tree_burkhold <- subset_tree_to_taxon(gtdb_tree, "order", "Burkholderiales")  |>
+  ggtree() |>
+  # Todas las familias ocuparán el mismo espacio en el eje y
+  scale_tree_to_level("family") |> 
+  # Añadimos anotaciones interactivas a los taxones
+  annotate_taxon_nodes("family", metadata) |> 
+  # En vez de representar el árbol completo, mostramos triángulos agrupando cada familia
+  collapse_tree_to_level("family") |> 
+  # Anotamos las puntas o hojas
+  add_tips() |> 
+  add_bootstraps()
+
+source("scripts/plot_boxes.R")
+tree_burkhold$coordinates$expand <- FALSE
+
+boxplot_burkhold <- plot_stat_boxplot(
+  tree_burkhold, 
+  level = "family",
+  stat = "gc_percentage"
+  )
+
+grid <- plot_tree_and_boxplots(tree_burkhold, boxplot_burkhold)
+
+girafe(ggobj = grid, height_svg = 10, options = opts_sizing(rescale = FALSE))
+```
+
+Al pasar el ratón por el nodo de un taxón, nos dirá su nombre y su número de genomas
+
+Veamos otro ejemplo no relacionado. 
+
+### Filo *Myxococcota*, agrupado por género mostrando su tamaño
+
+Aquí seleccionamos otro subconjunto (Myxococcota) a un nivel más alto (filo), 
+agruparemos a un nivel más bajo (género), y mostraremos otra variable (tamaño).
+
+
+```{r myxo}
+tree_myxo <- subset_tree_to_taxon(gtdb_tree, "phylum", "Myxococcota")  |>
+  ggtree() |>
+  scale_tree_to_level("genus") |> 
+  collapse_tree_to_level("genus") |> 
+  add_tips()
+
+boxplot_myxo <- plot_stat_boxplot(tree_myxo, "genome_size")
+
+grid_myxo <- plot_tree_and_boxplots(tree_myxo, boxplot_myxo)
+
+girafe(ggobj = grid_myxo, height_svg = 20, options = opts_sizing(rescale = FALSE))
+```
+
+### Orden Polyangiales, agrupado por género
+
+```{r poly}
+
+tree_poly <- subset_tree_to_taxon(gtdb_tree, "order", "Polyangiales") |>
+  ggtree() |>
+  scale_tree_to_level("family") |> 
+  annotate_taxon_nodes("family") |> 
+  collapse_tree_to_level("family") |> 
+  add_tips()
+
+boxplot_poly <- plot_stat_boxplot(
+  tree_poly,
+  level = "family", 
+  stat = "genome_size",
+  show_datapoints = TRUE # Aquí representamos todos los puntos
+  )
+
+grid_poly <- plot_tree_and_boxplots(tree_poly, boxplot_poly)
+
+girafe(ggobj = grid_poly, height_svg = 3, options = opts_sizing(rescale = FALSE))
+```
+
+Con este subconjunto de datos más manejable se pueden representar cómodamente
+todos los puntos de datos. Al pasar el ratón se puede saber su taxonomía completa. 
+
+
+Estos plot interactivos pueden ser mejorados de las siguientes maneras:
+
+* Los triángulos se podrían colorear por un nivel más alto de taxonomía. 
+* El color o el tamaño de estos puntos, podría indicar otra variable.
+* Al pasar el ratón por un boxplot, podrían salir los quartiles
+
+
+### Perspectivas:
+
+Una aplicación web Shiny que permita a un usuario seleccionar su taxón de
+interés, seleccionar la variable que quiere representar, seleccionar las anotaciones 
+que le parezcan relevantes y, lo más importante, ir a un subset del árbol clicando en
+uno de sus nodos, podría ser útil para no-programadores que quieran explorar 
+este set de datos.
+
+
