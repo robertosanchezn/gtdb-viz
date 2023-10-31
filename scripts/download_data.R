@@ -1,27 +1,23 @@
-
-download_and_unzip <- function(url) {
+download_data <- function(
+    gtdb_root = "https://data.gtdb.ecogenomic.org/releases/release214/214.1/"
+) {
   
-  # Extract the file name from the URL
-  file_name <- basename(url)
-  
-  # Construct the local file path
-  local_file_path <- file.path("data", file_name)
-  
-  # Check if the file exists, and download it if not
-  if (!file.exists(local_file_path)) {
-    cat("Downloading file from:", url, "\n")
-    download.file(url, local_file_path, method = "auto")
-  } else {
-    cat("File already exists:", local_file_path, "\n")
+  if (!dir.exists("data")) {
+    dir.create("data")
   }
   
-  # Check if the file is a ZIP archive and unzip it if needed
-  if (endsWith(local_file_path, "gz")) {
-    cat("Unzipping file:", file_name, "\n")
-    unzip(local_file_path, exdir = "data")
-  } else {
-    cat("File is not a ZIP archive:", file_name, "\n")
+  tree_url <- paste0(gtdb_root, "bac120_r214.tree")
+  tree_file <- file.path("data", "bac120_r214.tree")
+  
+  if (!file.exists(tree_file)) {
+    download.file(tree_url, tree_file)
   }
   
-  cat("Process complete.\n")
+  metadata_url <- paste0(gtdb_root, "bac120_metadata_r214.tsv.gz")
+  metadata_gz <- file.path("data", "bac120_metadata_r214.tsv.gz")
+  
+  if (!file.exists(metadata_gz)) {
+    download.file(metadata_url, metadata_gz, method = "wininet")
+  }
+  
 }
