@@ -88,7 +88,7 @@ plot_stat_boxplot <-
           low = "blue",
           mid = "yellow",
           high = "red", 
-          midpoint = median
+          midpoint = median)
     }
     
     return(boxplot)
