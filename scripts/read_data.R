@@ -1,7 +1,8 @@
-read_metadata <- function(path) {
+read_metadata <- function(connection) {
   metadata <- read_tsv(
-    metadata_file,
+    connection,
     col_select = c(
+      accession,
       gtdb_genome_representative,
       coding_density,
       gc_percentage,
@@ -13,7 +14,7 @@ read_metadata <- function(path) {
   metadata
 }
 
-read_and_format_tree <- function(path, metadata) {
+read_and_format_tree <- function(tree_file, metadata) {
   gtdb_tree <- read.tree(tree_file)
   
   # Remove single quotes
