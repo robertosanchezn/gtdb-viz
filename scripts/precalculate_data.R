@@ -1,11 +1,12 @@
-get_n_genomes <- function(metadata = metadata) {
+get_all_taxa <- function(metadata = metadata) {
   tax_levels |> 
     set_names() |> 
     map(\(x) 
         metadata |>
           group_by(!!sym(x)) |>
           tally() |>
-          arrange(desc(n))
+          arrange(desc(n)) |>
+          pull(!!sym(x))
     )
 }
 
