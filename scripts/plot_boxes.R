@@ -9,8 +9,8 @@ plot_stat_boxplot <-
            stat = "genome_size",
            metadata_df = metadata,
            show_datapoints = FALSE,
-           color_stat = "gc_content",
-           show_quartiles = FALSE
+           color_stat = "gc_percentage",
+           show_quartiles = TRUE
            ) {
     # TODO: This is too complicated and slow,
     # I think metadata can just be subsetted to the level the tree was subsetted
@@ -70,7 +70,6 @@ plot_stat_boxplot <-
     
     if (show_datapoints == TRUE) {
       
-      median = media(.data[[color_stat]])
       
       boxplot <- boxplot +
         geom_jitter_interactive(
@@ -84,11 +83,9 @@ plot_stat_boxplot <-
           width = 0,
           alpha = 0.1
         ) + 
-        scale_color_gradient2(
+        scale_color_gradient(
           low = "blue",
-          mid = "yellow",
-          high = "red", 
-          midpoint = median)
+          high = "red")
     }
     
     return(boxplot)
