@@ -1,3 +1,13 @@
+tax_levels <- c(
+  "domain",
+  "phylum",
+  "class",
+  "order",
+  "family",
+  "genus",
+  "species"
+)
+
 read_metadata <- function(connection) {
   metadata <- read_tsv(
     connection,
@@ -10,9 +20,11 @@ read_metadata <- function(connection) {
       gtdb_taxonomy,
     ),
     col_types = "cdddc"
-  )
-  metadata
+  ) |> 
+    separate(gtdb_taxonomy, tax_levels, sep = ";", remove = FALSE) |> 
+    mutate(across(all_of(tax_levels), ~str_sub(.x, 4)))
 }
+
 
 read_and_format_tree <- function(tree_file, metadata) {
   gtdb_tree <- read.tree(tree_file)
@@ -22,6 +34,12 @@ read_and_format_tree <- function(tree_file, metadata) {
   gtdb_tree$node.label <- str_remove_all(gtdb_tree$node.label, "'")
   
   tax <- distinct(metadata, label = gtdb_genome_representative, gtdb_taxonomy)
+  
+  species_genome_count <- metadata |> 
+    mutate(species = str_match(gtdb_taxonomy, "(s__.+?$)")[,2]) |>
+    group_by(species) |>
+    summarise(n_genomes = n()) |> 
+    arrange(desc(n_genomes))
   
   gtdb_tree <- as_tibble(gtdb_tree) |>
     left_join(tax, by = "label") |> 
@@ -34,6 +52,7 @@ read_and_format_tree <- function(tree_file, metadata) {
       taxon = if_else(is.na(taxon) & !is.na(species), species, taxon),
       label = if_else(is.na(gtdb_taxonomy), label, species)
     ) |>
+    left_join(species_genome_count, by = "species") |>
     as.treedata()
   
   gtdb_tree
