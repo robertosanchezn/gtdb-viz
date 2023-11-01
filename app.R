@@ -8,75 +8,72 @@ library(ggiraph)
 library(tidytree)
 library(ggtree)
 
-walk(list.files("scripts", full.names = TRUE), source)
+tax_levels <- c(
+  "domain",
+  "phylum",
+  "class",
+  "order",
+  "family",
+  "genus",
+  "species"
+)
 
+walk(list.files("scripts", full.names = TRUE), source)
 download_data()
 metadata <- read_metadata("data/bac120_metadata_r214.tsv.gz")
 tree <- read_and_format_tree("data/bac120_r214.tree", metadata = metadata)
-all_taxa <- unique(as.vector(str_split_fixed(metadata$gtdb_taxonomy, ";", 7)))
 
+
+
+# Define UI for the Shiny app
 ui <- fluidPage(
+  titlePanel("Select a taxon"),
   
   sidebarLayout(
     sidebarPanel(
-      selectizeInput(
-        "taxon",
-        "Select a taxon",
-        choices = NULL, 
-        selected = "f__Bacillaceae"), 
-      
+      selectInput("subset_level", "Select a level:", choices = tax_levels),
+      selectizeInput("subset_taxon", "Select a taxon:", choices = NULL), 
       actionButton("show", "Show tree"),
-      
-    ), 
+    ),
     mainPanel(
-        "Tree", girafeOutput("tree")
-      
+      girafeOutput("tree")
     )
   )
 )
 
-server <- function(input, output, session){
+# Define server logic for the Shiny app
+server <- function(input, output, session) {
   
-  updateSelectizeInput(
-    session,
-    "taxon", 
-    "Select a taxon",
-    choices = all_taxa, 
-    selected = "f__Bacillaceae", 
-    server = TRUE)
-  
-  taxon_tree <- eventReactive(input$show, {
-    subset_tree_to_taxon(tree, input$taxon)
+  # Update the selectize input choices based on the selected level
+  observe({
+    choices <- switch(
+      input$subset_level, 
+      get_all_taxa(metadata)[[input$subset_level]]
+      )
+    
+    updateSelectizeInput(session, "subset_taxon", choices = choices, server = TRUE)
   })
   
-  output$text <- renderText(input$taxon)
+  # One the action button is pressed, calculate the subset_tree
   
+  subset_tree <- eventReactive(input$show, {
+    subset_tree_to_taxon(tree, input$subset_level, input$subset_taxon)
+  })
+  
+  
+  # Display the selected text from the selectize input
   output$tree <- renderGirafe({
     
-    tree_interactive <- taxon_tree() |> 
+    tree_interactive <- subset_tree() |>
       ggtree() |> 
       scale_tree_to_level("genus") |> 
       annotate_taxon_nodes("genus", metadata_df = metadata) |> 
       collapse_tree_to_level("genus") 
     
-    boxplot_interactive <- plot_stat_boxplot(
-      tree_interactive, 
-      metadata_df = metadata, 
-      stat = "genome_size",
-      color_stat = "gc_percentage",
-      level = "genus", 
-      show_datapoints = FALSE, 
-    )
-    girafe(
-      ggobj = plot_tree_and_boxplots(
-        tree_interactive,
-        boxplot_interactive)
-    )
+    girafe(ggobj = tree_interactive)
   })
-  
+
 }
 
+# Run the Shiny app
 shinyApp(ui, server)
-
-
-
