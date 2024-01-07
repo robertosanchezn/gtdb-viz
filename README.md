@@ -2,4 +2,6 @@
 Interactive visualization of the GTDB tree and metadata.
 
 
-Early version used for the TFM proposal
+Early prototype of a web-based visualization of the GTDB taxonomy and metadata.
+Version presented as project for the data visualization course at UMU. 
+The web app can be accessed at [https://bs1f8f-robertosanchezn.shinyapps.io/gtdb-viz/](bs1f8f-robertosanchezn.shinyapps.io/gtdb-viz/)
