@@ -18,11 +18,6 @@ tax_levels <- c(
   "species"
 )
 
-walk(list.files("scripts", full.names = TRUE), source)
-download_data()
-metadata <- read_metadata("data/bac120_metadata_r214.tsv.gz")
-tree <- read_and_format_tree("data/bac120_r214.tree", metadata = metadata)
-
 # Define UI for the Shiny app
 ui <- fluidPage(
   titlePanel("Select a taxon"),
@@ -57,6 +52,12 @@ ui <- fluidPage(
 
 # Define server logic for the Shiny app
 server <- function(input, output, session) {
+  
+  walk(list.files("scripts", full.names = TRUE), source)
+  download_data()
+  metadata <- read_metadata("data/bac120_metadata_r214.tsv.gz")
+  tree <- read_and_format_tree("data/bac120_r214.tree", metadata = metadata)
+  
   
   # Update the selectize input choices based on the selected level
   observe({
